@@ -13,6 +13,10 @@ import shlex
 # Константы для операций
 BACKUP = 'backup'
 RESTORE = 'restore'
+CLEAN = 'clean'
+DROP = 'drop'
+CREATE = 'create'
+
 
 # Класс для хранения констант
 class Config:
@@ -21,14 +25,19 @@ class Config:
     SHARE_PASS = "SHARE_PASS"
     SHARE_HOST = "SHARE_HOST"
     SHARE_NAME = "SHARE_NAME"
-    CLIENT_NAME = "db_tools" # Укажите имя клиента. Это может быть любое имя.
+    CLIENT_NAME = "db_tools"  # Укажите имя клиента. Это может быть любое имя.
 
     # Константы для сообщений об ошибках
     RESTORE_FILE_ERROR = "You must provide a --restore_file for restore operation"
     INVALID_OPERATION_ERROR = f"Invalid operation. Please choose either '{BACKUP}' or '{RESTORE}'"
 
+
 # Настройка логирования
 logging.basicConfig(filename='db_tools.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+logging.getLogger('').addHandler(console)
+
 
 # Функция для создания парсера аргументов командной строки
 def define_parser():
@@ -42,9 +51,10 @@ def define_parser():
     parser.add_argument('--share_pass', type=str, default=Config.SHARE_PASS, help="Windows share password")
     parser.add_argument('--share_host', type=str, default=Config.SHARE_HOST, help="Windows share host")
     parser.add_argument('--share_name', type=str, default=Config.SHARE_NAME, help="Windows share name")
-    parser.add_argument('operation', type=str, choices=[BACKUP, RESTORE], help="Operation: backup or restore")
+    parser.add_argument('operation', type=str, choices=[BACKUP, RESTORE, CLEAN, DROP, CREATE], help="Operation: backup, restore, clean, drop or create")
     parser.add_argument('--restore_file', type=str, help="File to restore from (required for restore operation)")
     return parser
+
 
 # Функция для парсинга аргументов командной строки
 def parse_arguments(parser):
@@ -54,15 +64,16 @@ def parse_arguments(parser):
         logging.error(f"Failed to parse command line arguments: {e}")
         exit(1)
 
+
 # Функция для запуска команды и обработки ошибок
 def run_command(command, env=None):
     # Обновляем окружение с добавлением новых переменных, если они предоставлены
     env = {**os.environ, **(env or {})}
-    
+
     try:
         # Разделяем команду на список аргументов
         args = shlex.split(command)
-        
+
         # Запуск процесса с перенаправлением вывода в лог
         process = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
@@ -82,16 +93,43 @@ def run_command(command, env=None):
         exit(1)
 
 
+# Очистка БД
+def clean_db(args):
+    terminate_command = f"psql -U {args.db_user} -h {args.db_host} -p {args.db_port} -d postgres -c \"SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '{args.db_name}' AND pid <> pg_backend_pid();\""
+    run_command(terminate_command, env={'PGPASSWORD': args.db_pass})
+
+    clean_db_command = f"psql -U {args.db_user} -h {args.db_host} -p {args.db_port} -d {args.db_name} -c \"DO $$ DECLARE r record; BEGIN FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema()) LOOP EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END $$;\""
+    run_command(clean_db_command, env={'PGPASSWORD': args.db_pass})
+
+
+# Удаление БД
+def drop_db(args):
+    terminate_command = f"psql -U {args.db_user} -h {args.db_host} -p {args.db_port} -d postgres -c \"SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '{args.db_name}' AND pid <> pg_backend_pid();\""
+    run_command(terminate_command, env={'PGPASSWORD': args.db_pass})
+
+    drop_db_command = f"psql -U {args.db_user} -h {args.db_host} -p {args.db_port} -c 'DROP DATABASE {args.db_name}'"
+    run_command(drop_db_command, env={'PGPASSWORD': args.db_pass})
+
+
+# Создание БД
+def create_db(args):
+    create_db_command = f"psql -U {args.db_user} -h {args.db_host} -p {args.db_port} -c 'CREATE DATABASE {args.db_name}'"
+    run_command(create_db_command, env={'PGPASSWORD': args.db_pass})
+
+
 # Функция для установления SMB соединения
 def create_smb_session(args):
     smbclient.register_session(args.share_host, username=args.share_user, password=args.share_pass)
 
-# Функции для отправки и получения файлов через SMB
+
+# Функции для отправки файлов через SMB
 def send_file_smb(args, local_file_path, remote_file_path, remote_share_name):
     with open(local_file_path, 'rb') as file_obj:
         with smbclient.open_file(f"\\\\{args.share_host}\\{remote_share_name}\\{remote_file_path}", mode='wb') as remote_file:
             shutil.copyfileobj(file_obj, remote_file)
 
+
+# Функции для получения файлов через SMB
 def get_file_smb(args, local_file_path, remote_file_path, remote_share_name):
     with smbclient.open_file(f"\\\\{args.share_host}\\{remote_share_name}\\{remote_file_path}", mode='rb') as remote_file:
         with open(local_file_path, 'wb') as file_obj:
@@ -118,7 +156,7 @@ def backup_db(args):
 
     # Отправка файла резервной копии на удалённый SMB сервер
     smbclient.register_session(args.share_host, username=args.share_user, password=args.share_pass)
-    send_file_smb(args, str(backup_file_gz), str(backup_file_gz), args.share_name) # Пути к файлам и имя SMB-шары
+    send_file_smb(args, str(backup_file_gz), str(backup_file_gz), args.share_name)  # Пути к файлам и имя SMB-шары
 
 
 # Функция для восстановления базы данных
@@ -129,7 +167,7 @@ def restore_db(args):
 
     # Скачивание файла резервной копии с удалённого SMB сервера
     smbclient.register_session(args.share_host, username=args.share_user, password=args.share_pass)
-    get_file_smb(args, str(restore_file_gz), args.restore_file, args.share_name) # Пути к файлам и имя SMB-шары
+    get_file_smb(args, str(restore_file_gz), args.restore_file, args.share_name)  # Пути к файлам и имя SMB-шары
 
     # Распаковка файла резервной копии
     with gzip.open(restore_file_gz, 'rb') as f_in, open(restore_file, 'wb') as f_out:
@@ -160,8 +198,15 @@ def main():
             logging.error(Config.RESTORE_FILE_ERROR)
             exit(1)
         restore_db(args)
+    elif args.operation.lower() == CLEAN:
+        clean_db(args)
+    elif args.operation.lower() == DROP:
+        drop_db(args)
+    elif args.operation.lower() == CREATE:
+        create_db(args)
     else:
         logging.error(Config.INVALID_OPERATION_ERROR)
+
 
 if __name__ == "__main__":
     main()

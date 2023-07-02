@@ -1,10 +1,10 @@
 # PGRemote: PostgreSQL Remote Tools
 
-PGRemote — это инструмент для удаленного управления сервером PostgreSQL, основанный на скрипте `db_tools.py`. Его ключевые функции включают резервное копирование и восстановление баз данных, а также возможность сохранения и извлечения данных на/из удаленного SMB-сервера.
+PGRemote — это инструмент для удаленного управления сервером PostgreSQL, основанный на скрипте `db_tools.py`. С его помощью вы можете выполнять резервное копирование и восстановление баз данных, сохранять и извлекать данные на/из удаленного SMB-сервера, создавать, удалять и очищать базы данных.
 
 ## Введение
 
-`db_tools.py` — это мощный и простой в использовании скрипт для работы с вашими базами данных PostgreSQL. Все операции выполняются удаленно, что обеспечивает максимальное удобство и безопасность при работе с базами данных без прямого доступа к серверу PostgreSQL.
+`db_tools.py` — это мощный и простой в использовании скрипт для работы с вашими базами данных PostgreSQL. С его помощью вы можете не только резервировать и восстанавливать базы данных, но и создавать новые базы данных, удалять существующие и очищать их от всех данных. Все операции выполняются удаленно, что обеспечивает максимальное удобство и безопасность при работе с базами данных без прямого доступа к серверу PostgreSQL.
 
 ## Установка
 
@@ -18,7 +18,7 @@ pip3 install smbclient
 
 В скрипте `db_tools.py` определены следующие переменные, которые можно настроить в соответствии с вашими требованиями:
 
-- `DB_PORT = 5432`: Порт, на котором работает ваш сервер PostgreSQL.
+- `DB_PORT = 5432`: Порт, на котором работает ваш сервер PostgreSQL. Это порт по умолчанию, его можно изменить при необходимости.
 - `SHARE_USER`: Имя пользователя для доступа к SMB-серверу.
 - `SHARE_PASS`: Пароль для доступа к SMB-серверу.
 - `SHARE_HOST`: Имя хоста SMB-сервера.
@@ -49,15 +49,31 @@ python3 db_tools.py --db_name <name> --db_user <user> --db_pass <pass> --db_host
 Создание резервной копии базы данных:
 
 ```bash
-python3 db_tools.py --db_name mydatabase --db_user myuser --db
-
-_pass mypass --db_host localhost backup
+python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_host localhost backup
 ```
 
 Восстановление базы данных из резервной копии:
 
 ```bash
 python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_host localhost restore --restore_file mydatabase_backup.gz
+```
+
+Создание базы данных:
+
+```bash
+python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_host localhost create
+```
+
+Удаление базы данных:
+
+```bash
+python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_host localhost drop
+```
+
+Очистка базы данных:
+
+```bash
+python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_host localhost clean
 ```
 
 ## Логирование
