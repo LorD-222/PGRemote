@@ -70,10 +70,16 @@ python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_
 python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_host localhost drop
 ```
 
-Очистка базы данных:
+Очистка(Truncate) базы данных:
 
 ```bash
 python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_host localhost clean
+```
+
+Очистка(Vacuum) базы данных:
+
+```bash
+python3 db_tools.py --db_name mydatabase --db_user myuser --db_pass mypass --db_host localhost vacuum
 ```
 
 ## Логирование

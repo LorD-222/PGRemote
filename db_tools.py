@@ -16,6 +16,7 @@ RESTORE = 'restore'
 CLEAN = 'clean'
 DROP = 'drop'
 CREATE = 'create'
+VACUUM = 'vacuum'
 
 
 # Класс для хранения констант
@@ -51,7 +52,7 @@ def define_parser():
     parser.add_argument('--share_pass', type=str, default=Config.SHARE_PASS, help="Windows share password")
     parser.add_argument('--share_host', type=str, default=Config.SHARE_HOST, help="Windows share host")
     parser.add_argument('--share_name', type=str, default=Config.SHARE_NAME, help="Windows share name")
-    parser.add_argument('operation', type=str, choices=[BACKUP, RESTORE, CLEAN, DROP, CREATE], help="Operation: backup, restore, clean, drop or create")
+    parser.add_argument('operation', type=str, choices=[BACKUP, RESTORE, CLEAN, DROP, CREATE, VACUUM], help="Operation: backup, restore, clean, vacuum, drop or create")
     parser.add_argument('--restore_file', type=str, help="File to restore from (required for restore operation)")
     return parser
 
@@ -115,6 +116,15 @@ def drop_db(args):
 def create_db(args):
     create_db_command = f"psql -U {args.db_user} -h {args.db_host} -p {args.db_port} -c 'CREATE DATABASE {args.db_name}'"
     run_command(create_db_command, env={'PGPASSWORD': args.db_pass})
+
+
+# Vacuum БД
+def vacuum_db(args):
+    terminate_command = f"psql -U {args.db_user} -h {args.db_host} -p {args.db_port} -d postgres -c \"SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '{args.db_name}' AND pid <> pg_backend_pid();\""
+    run_command(terminate_command, env={'PGPASSWORD': args.db_pass})
+    
+    vacuum_db_command = f"psql -U {args.db_user} -h {args.db_host} -p {args.db_port} -d {args.db_name} -c 'VACUUM FULL'"
+    run_command(vacuum_db_command, env={'PGPASSWORD': args.db_pass})
 
 
 # Функция для установления SMB соединения
@@ -204,6 +214,8 @@ def main():
         drop_db(args)
     elif args.operation.lower() == CREATE:
         create_db(args)
+    elif args.operation.lower() == VACUUM:
+        vacuum_db(args)
     else:
         logging.error(Config.INVALID_OPERATION_ERROR)
 
